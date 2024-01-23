@@ -16,9 +16,13 @@
  * Simply declare your rx and tx frames using 'CanFrame' structures and you are good to go!
  * 
  */
-
+#ifdef ARDUINO
 #include <Arduino.h>
+#else
+#include "inttypes.h"
+#endif
 #include "driver/twai.h"
+
 
 // Uncomment or declare before importing header
 //#define LOG_TWAI log_e
@@ -67,7 +71,7 @@ class TwaiCAN {
     void setSpeed(TwaiSpeed);
     TwaiSpeed getSpeed() { return speed; };
 
-    // Converts from numeric CAN speed to enum values setSpeed(convertSpeed(500));
+    // Converts from numeric CAN speed to enum values: setSpeed(convertSpeed(500));
     TwaiSpeed convertSpeed(uint16_t canSpeed = 0);
     
     // Size of queues for TWAI-CAN driver - remember about memory constrains!
@@ -83,7 +87,7 @@ class TwaiCAN {
 
     // Everything is defaulted so you can just call .begin() or .begin(TwaiSpeed)
     // Calling begin() to change speed works, it will disable current driver first
-    bool begin(TwaiSpeed twaiSpeed = TWAI_SPEED_500KBPS, 
+    bool begin(TwaiSpeed twaiSpeed = TWAI_SPEED_SIZE, 
                     int8_t txPin = -1, int8_t rxPin = -1,
                     uint16_t txQueue = 0xFFFF, uint16_t rxQueue = 0xFFFF,
                     twai_filter_config_t*  fConfig = nullptr,
@@ -91,8 +95,8 @@ class TwaiCAN {
                     twai_timing_config_t*  tConfig = nullptr);
     
     // Pass frame either by reference or pointer; timeout in ms, you can pass 0 for non blocking
-    inline bool readFrame(CanFrame& frame, uint32_t timeout = 1000) { return readFrame(&frame, timeout); }
-    inline bool readFrame(CanFrame* frame, uint32_t timeout = 1000) {
+    inline bool IRAM_ATTR readFrame(CanFrame& frame, uint32_t timeout = 1000) { return readFrame(&frame, timeout); }
+    inline bool IRAM_ATTR readFrame(CanFrame* frame, uint32_t timeout = 1000) {
         bool ret = false;
         if((frame) && twai_receive(frame, pdMS_TO_TICKS(timeout)) == ESP_OK) {
             LOG_TWAI_RX("Frame received %03X", frame->identifier);
@@ -102,8 +106,8 @@ class TwaiCAN {
     }
 
     // Pass frame either by reference or pointer; timeout in ms, you can pass 0 for non blocking
-    inline bool writeFrame(CanFrame& frame, uint32_t timeout = 1) { return writeFrame(&frame, timeout); }
-    inline bool writeFrame(CanFrame* frame, uint32_t timeout = 1) {
+    inline bool IRAM_ATTR writeFrame(CanFrame& frame, uint32_t timeout = 1) { return writeFrame(&frame, timeout); }
+    inline bool IRAM_ATTR writeFrame(CanFrame* frame, uint32_t timeout = 1) {
         bool ret = false;
         if((frame) && twai_transmit(frame, pdMS_TO_TICKS(timeout)) == ESP_OK) {
             LOG_TWAI_TX("Frame sent     %03X", frame->identifier);
