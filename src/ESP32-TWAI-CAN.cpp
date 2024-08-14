@@ -187,8 +187,9 @@ bool TwaiCAN::begin(TwaiSpeed twaiSpeed,
         init = true;
         setSpeed(twaiSpeed);
         setPins(txPin, rxPin);
-        gpio_reset_pin((gpio_num_t)rxPin);
-        gpio_reset_pin((gpio_num_t)txPin);
+        
+        gpio_reset_pin((gpio_num_t)rx);
+        gpio_reset_pin((gpio_num_t)tx);
 
         setTxQueueSize(txQueue);
         setRxQueueSize(rxQueue);
