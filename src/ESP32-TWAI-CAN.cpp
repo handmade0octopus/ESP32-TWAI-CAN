@@ -5,6 +5,30 @@ void TwaiCAN::setSpeed(TwaiSpeed twaiSpeed) {
     if(twaiSpeed < TWAI_SPEED_SIZE) speed = twaiSpeed;
 }
 
+uint32_t TwaiCAN::getSpeedNumeric() { 
+    uint32_t actualSpeed = 500;
+	switch(getSpeed()) {
+        default: break;
+        #if (SOC_TWAI_BRP_MAX > 256)
+        case TWAI_SPEED_1KBPS   :   actualSpeed = 1   ; break;
+        case TWAI_SPEED_5KBPS   :   actualSpeed = 5   ; break;
+        case TWAI_SPEED_10KBPS  :   actualSpeed = 10  ; break;
+        #endif
+        #if (SOC_TWAI_BRP_MAX > 128) || (CONFIG_ESP32_REV_MIN_FULL >= 200)
+        case TWAI_SPEED_12_5KBPS:   actualSpeed = 12  ; break;
+        case TWAI_SPEED_16KBPS  :   actualSpeed = 16  ; break;
+        case TWAI_SPEED_20KBPS  :   actualSpeed = 20  ; break;
+        #endif
+		case TWAI_SPEED_100KBPS :   actualSpeed = 100 ; break;
+		case TWAI_SPEED_125KBPS :   actualSpeed = 125 ; break;
+		case TWAI_SPEED_250KBPS :   actualSpeed = 250 ; break;
+		case TWAI_SPEED_500KBPS :   actualSpeed = 500 ; break;
+		case TWAI_SPEED_800KBPS :   actualSpeed = 800 ; break;
+		case TWAI_SPEED_1000KBPS:   actualSpeed = 1000; break;
+	}
+    return actualSpeed;
+}
+
 TwaiSpeed TwaiCAN::convertSpeed(uint16_t canSpeed) { 
     TwaiSpeed actualSpeed = getSpeed();
 	switch(canSpeed) {

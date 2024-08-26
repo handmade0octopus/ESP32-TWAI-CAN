@@ -69,7 +69,8 @@ class TwaiCAN {
 
     // Call before begin!
     void setSpeed(TwaiSpeed);
-    TwaiSpeed getSpeed() { return speed; };
+    TwaiSpeed getSpeed()        { return speed; };
+    uint32_t  getSpeedNumeric();
 
     // Converts from numeric CAN speed to enum values: setSpeed(convertSpeed(500));
     TwaiSpeed convertSpeed(uint16_t canSpeed = 0);
