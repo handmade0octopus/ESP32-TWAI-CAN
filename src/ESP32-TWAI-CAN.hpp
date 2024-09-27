@@ -54,6 +54,7 @@ enum TwaiSpeed : uint8_t {
     TWAI_SPEED_16KBPS,
     TWAI_SPEED_20KBPS,
     #endif
+    TWAI_SPEED_50KBPS,
     TWAI_SPEED_100KBPS,
     TWAI_SPEED_125KBPS,
     TWAI_SPEED_250KBPS,
@@ -69,8 +70,7 @@ class TwaiCAN {
 
     // Call before begin!
     void setSpeed(TwaiSpeed);
-    TwaiSpeed getSpeed()        { return speed; };
-    uint32_t  getSpeedNumeric();
+    TwaiSpeed getSpeed() { return speed; };
 
     // Converts from numeric CAN speed to enum values: setSpeed(convertSpeed(500));
     TwaiSpeed convertSpeed(uint16_t canSpeed = 0);
@@ -82,13 +82,6 @@ class TwaiCAN {
     // Returns number of messages still in queue
     uint32_t inTxQueue();
     uint32_t inRxQueue();
-
-    uint32_t rxErrorCounter();
-    uint32_t txErrorCounter();
-    uint32_t rxMissedCounter();
-    uint32_t txFailedCounter();
-    uint32_t busErrCounter();
-    uint32_t canState();
     
     
     bool setPins(int8_t txPin, int8_t rxPin);
@@ -101,10 +94,6 @@ class TwaiCAN {
                     twai_filter_config_t*  fConfig = nullptr,
                     twai_general_config_t* gConfig = nullptr,
                     twai_timing_config_t*  tConfig = nullptr);
-
-    bool recover(void);
-
-    bool restart(void);
     
     // Pass frame either by reference or pointer; timeout in ms, you can pass 0 for non blocking
     inline bool IRAM_ATTR readFrame(CanFrame& frame, uint32_t timeout = 1000) { return readFrame(&frame, timeout); }

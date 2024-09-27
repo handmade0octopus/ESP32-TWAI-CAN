@@ -5,30 +5,6 @@ void TwaiCAN::setSpeed(TwaiSpeed twaiSpeed) {
     if(twaiSpeed < TWAI_SPEED_SIZE) speed = twaiSpeed;
 }
 
-uint32_t TwaiCAN::getSpeedNumeric() { 
-    uint32_t actualSpeed = 500;
-	switch(getSpeed()) {
-        default: break;
-        #if (SOC_TWAI_BRP_MAX > 256)
-        case TWAI_SPEED_1KBPS   :   actualSpeed = 1   ; break;
-        case TWAI_SPEED_5KBPS   :   actualSpeed = 5   ; break;
-        case TWAI_SPEED_10KBPS  :   actualSpeed = 10  ; break;
-        #endif
-        #if (SOC_TWAI_BRP_MAX > 128) || (CONFIG_ESP32_REV_MIN_FULL >= 200)
-        case TWAI_SPEED_12_5KBPS:   actualSpeed = 12  ; break;
-        case TWAI_SPEED_16KBPS  :   actualSpeed = 16  ; break;
-        case TWAI_SPEED_20KBPS  :   actualSpeed = 20  ; break;
-        #endif
-		case TWAI_SPEED_100KBPS :   actualSpeed = 100 ; break;
-		case TWAI_SPEED_125KBPS :   actualSpeed = 125 ; break;
-		case TWAI_SPEED_250KBPS :   actualSpeed = 250 ; break;
-		case TWAI_SPEED_500KBPS :   actualSpeed = 500 ; break;
-		case TWAI_SPEED_800KBPS :   actualSpeed = 800 ; break;
-		case TWAI_SPEED_1000KBPS:   actualSpeed = 1000; break;
-	}
-    return actualSpeed;
-}
-
 TwaiSpeed TwaiCAN::convertSpeed(uint16_t canSpeed) { 
     TwaiSpeed actualSpeed = getSpeed();
 	switch(canSpeed) {
@@ -44,6 +20,7 @@ TwaiSpeed TwaiCAN::convertSpeed(uint16_t canSpeed) {
         case 16:    actualSpeed = TWAI_SPEED_16KBPS;    break;
         case 20:    actualSpeed = TWAI_SPEED_20KBPS;    break;
         #endif
+		case 50:   actualSpeed = TWAI_SPEED_50KBPS;   break;
 		case 100:   actualSpeed = TWAI_SPEED_100KBPS;   break;
 		case 125:   actualSpeed = TWAI_SPEED_125KBPS;   break;
 		case 250:   actualSpeed = TWAI_SPEED_250KBPS;   break;
@@ -77,60 +54,6 @@ uint32_t TwaiCAN::inRxQueue() {
     return ret;
 };
 
-uint32_t TwaiCAN::rxErrorCounter()
-{
-    uint32_t ret = 0;
-    if(getStatusInfo()) {
-        ret = status.rx_error_counter;
-    }
-    return ret;
-};
-
-uint32_t TwaiCAN::txErrorCounter()
-{
-    uint32_t ret = 0;
-    if(getStatusInfo()) {
-        ret = status.tx_error_counter;
-    }
-    return ret;
-};
-
-uint32_t TwaiCAN::rxMissedCounter()
-{
-    uint32_t ret = 0;
-    if(getStatusInfo()) {
-        ret = status.rx_missed_count;
-    }
-    return ret;
-};
-
-uint32_t TwaiCAN::txFailedCounter()
-{
-    uint32_t ret = 0;
-    if(getStatusInfo()) {
-        ret = status.tx_failed_count;
-    }
-    return ret;
-};
-
-uint32_t TwaiCAN::busErrCounter()
-{
-    uint32_t ret = 0;
-    if(getStatusInfo()) {
-        ret = status.bus_error_count;
-    }
-    return ret;
-};
-
-uint32_t TwaiCAN::canState()
-{
-    uint32_t ret = 0;
-    if(getStatusInfo()) {
-        ret = (uint32_t)status.state;
-    }
-    return ret;
-};
-
 
 bool TwaiCAN::setPins(int8_t txPin, int8_t rxPin) {
     bool ret = !init;
@@ -142,60 +65,6 @@ bool TwaiCAN::setPins(int8_t txPin, int8_t rxPin) {
 
     LOG_TWAI("Wrong pins or CAN bus running already!");
     return ret;
-}
-
-bool TwaiCAN::recover(void) {
-    uint32_t ret = 0;
-    if(!getStatusInfo()) {
-        LOG_TWAI("CAN bus status read failed!");
-        return false;
-    }
-    switch(status.state)
-    {
-      case TWAI_STATE_BUS_OFF:
-      {
-        LOG_TWAI("Bus was off, starting recovery");
-        return twai_initiate_recovery();
-      }
-      case TWAI_STATE_RECOVERING:
-      {
-        // Already recovering, nothing to do
-        return true;
-      }
-      case TWAI_STATE_STOPPED:
-      {
-        // Stopped, nothing to do
-        return true;
-      }
-      default:
-      {
-        LOG_TWAI("Wrong state for recovery!");
-      }
-    }
-
-    return false;
-}
-
-bool TwaiCAN::restart(void) {
-    uint32_t ret = 0;
-    if(!getStatusInfo()) {
-        LOG_TWAI("CAN bus status read failed!");
-        return false;
-    }
-    switch(status.state)
-    {
-      case TWAI_STATE_STOPPED:
-      {
-        // Stopped, restart
-        return twai_start();
-      }
-      default:
-      {
-        LOG_TWAI("Wrong state for restart!");
-      }
-    }
-
-    return false;
 }
 
 bool TwaiCAN::begin(TwaiSpeed twaiSpeed, 
@@ -211,10 +80,6 @@ bool TwaiCAN::begin(TwaiSpeed twaiSpeed,
         init = true;
         setSpeed(twaiSpeed);
         setPins(txPin, rxPin);
-        
-        gpio_reset_pin((gpio_num_t)rx);
-        gpio_reset_pin((gpio_num_t)tx);
-
         setTxQueueSize(txQueue);
         setRxQueueSize(rxQueue);
 
@@ -235,6 +100,7 @@ bool TwaiCAN::begin(TwaiSpeed twaiSpeed,
             TWAI_TIMING_CONFIG_16KBITS(),
             TWAI_TIMING_CONFIG_20KBITS(),
             #endif
+			TWAI_TIMING_CONFIG_50KBITS(),
             TWAI_TIMING_CONFIG_100KBITS(),
             TWAI_TIMING_CONFIG_125KBITS(),
             TWAI_TIMING_CONFIG_250KBITS(),
