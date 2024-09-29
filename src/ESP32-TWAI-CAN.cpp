@@ -19,6 +19,7 @@ uint32_t TwaiCAN::getSpeedNumeric() {
         case TWAI_SPEED_16KBPS  :   actualSpeed = 16  ; break;
         case TWAI_SPEED_20KBPS  :   actualSpeed = 20  ; break;
         #endif
+		case TWAI_SPEED_50KBPS  :   actualSpeed = 50  ; break;
 		case TWAI_SPEED_100KBPS :   actualSpeed = 100 ; break;
 		case TWAI_SPEED_125KBPS :   actualSpeed = 125 ; break;
 		case TWAI_SPEED_250KBPS :   actualSpeed = 250 ; break;
@@ -44,6 +45,7 @@ TwaiSpeed TwaiCAN::convertSpeed(uint16_t canSpeed) {
         case 16:    actualSpeed = TWAI_SPEED_16KBPS;    break;
         case 20:    actualSpeed = TWAI_SPEED_20KBPS;    break;
         #endif
+		case 50:    actualSpeed = TWAI_SPEED_50KBPS;   break;
 		case 100:   actualSpeed = TWAI_SPEED_100KBPS;   break;
 		case 125:   actualSpeed = TWAI_SPEED_125KBPS;   break;
 		case 250:   actualSpeed = TWAI_SPEED_250KBPS;   break;
@@ -235,6 +237,7 @@ bool TwaiCAN::begin(TwaiSpeed twaiSpeed,
             TWAI_TIMING_CONFIG_16KBITS(),
             TWAI_TIMING_CONFIG_20KBITS(),
             #endif
+            TWAI_TIMING_CONFIG_50KBITS(),
             TWAI_TIMING_CONFIG_100KBITS(),
             TWAI_TIMING_CONFIG_125KBITS(),
             TWAI_TIMING_CONFIG_250KBITS(),

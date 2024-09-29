@@ -54,6 +54,7 @@ enum TwaiSpeed : uint8_t {
     TWAI_SPEED_16KBPS,
     TWAI_SPEED_20KBPS,
     #endif
+    TWAI_SPEED_50KBPS,
     TWAI_SPEED_100KBPS,
     TWAI_SPEED_125KBPS,
     TWAI_SPEED_250KBPS,
