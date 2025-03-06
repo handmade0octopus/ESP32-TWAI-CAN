@@ -1,6 +1,6 @@
 # ESP32-TWAI-CAN
 
-ESP32 driver library for TWAI / CAN for Adruino using ESP-IDF drivers.
+ESP32 driver library for TWAI / CAN for Arduino using ESP-IDF drivers.
 
 Tested on ESP32 and ESP32-S3.
 
