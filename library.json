@@ -14,13 +14,12 @@
             "+<ESP32-TWAI-CAN.cpp>"
         ]
     },
-    "authors":
-    [
-      {
-         "name": "sorek",
-         "email": "contact@sorek.uk",
-         "url": "http://sorek.uk",
-         "maintainer": true
-      }
+    "authors": [
+        {
+            "name": "sorek",
+            "email": "contact@sorek.uk",
+            "url": "http://sorek.uk",
+            "maintainer": true
+        }
     ]
 }
