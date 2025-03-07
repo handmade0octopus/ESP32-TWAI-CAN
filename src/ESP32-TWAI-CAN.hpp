@@ -7,42 +7,44 @@
  * @brief ESP32 driver for TWAI / CAN for Arduino using ESP-IDF drivers.
  * @version 1.0
  * @date 2023-12-15
- * 
+ *
  * @copyright Copyright (c) 2023
- * 
+ *
  * I tried to create as simple and as lightweight Arduino ESP32 TWAI / CAN library
  * as possible. Currently testing it has very small footprint both on ESP32 and ESP32-S3.
- * 
+ *
  * Simply declare your rx and tx frames using 'CanFrame' structures and you are good to go!
- * 
+ *
  */
+
 #ifdef ARDUINO
-#include <Arduino.h>
+# include <Arduino.h>
 #else
-#include "inttypes.h"
+# include "inttypes.h"
 #endif
+
 #include "driver/twai.h"
 
-
 // Uncomment or declare before importing header
-//#define LOG_TWAI log_e
-//#define LOG_TWAI_TX log_e
-//#define LOG_TWAI_RX log_e
+// #define LOG_TWAI log_e
+// #define LOG_TWAI_TX log_e
+// #define LOG_TWAI_RX log_e
 
 #ifndef LOG_TWAI
-#define LOG_TWAI
+# define LOG_TWAI
 #endif
 
 #ifndef LOG_TWAI_TX
-#define LOG_TWAI_TX
+# define LOG_TWAI_TX
 #endif
 
 #ifndef LOG_TWAI_RX
-#define LOG_TWAI_RX
+# define LOG_TWAI_RX
 #endif
 
 typedef twai_message_t CanFrame;
 
+// clang-format off
 enum TwaiSpeed : uint8_t {
     #if (SOC_TWAI_BRP_MAX > 256)
     TWAI_SPEED_1KBPS,
@@ -63,19 +65,20 @@ enum TwaiSpeed : uint8_t {
     TWAI_SPEED_1000KBPS,
     TWAI_SPEED_SIZE
 };
+// clang-format on
 
 class TwaiCAN {
- public:
+  public:
     TwaiCAN() {}
 
     // Call before begin!
-    void setSpeed(TwaiSpeed);
-    TwaiSpeed getSpeed()        { return speed; };
+    void      setSpeed(TwaiSpeed);
+    TwaiSpeed getSpeed() { return speed; };
     uint32_t  getSpeedNumeric();
 
     // Converts from numeric CAN speed to enum values: setSpeed(convertSpeed(500));
     TwaiSpeed convertSpeed(uint16_t canSpeed = 0);
-    
+
     // Size of queues for TWAI-CAN driver - remember about memory constrains!
     void setTxQueueSize(uint16_t);
     void setRxQueueSize(uint16_t);
@@ -90,23 +93,24 @@ class TwaiCAN {
     uint32_t txFailedCounter();
     uint32_t busErrCounter();
     uint32_t canState();
-    
-    
+
     bool setPins(int8_t txPin, int8_t rxPin);
 
     // Everything is defaulted so you can just call .begin() or .begin(TwaiSpeed)
     // Calling begin() to change speed works, it will disable current driver first
-    bool begin(TwaiSpeed twaiSpeed = TWAI_SPEED_SIZE, 
-                    int8_t txPin = -1, int8_t rxPin = -1,
-                    uint16_t txQueue = 0xFFFF, uint16_t rxQueue = 0xFFFF,
-                    twai_filter_config_t*  fConfig = nullptr,
-                    twai_general_config_t* gConfig = nullptr,
-                    twai_timing_config_t*  tConfig = nullptr);
+    bool begin(TwaiSpeed              twaiSpeed = TWAI_SPEED_SIZE,
+               int8_t                 txPin     = -1,
+               int8_t                 rxPin     = -1,
+               uint16_t               txQueue   = 0xFFFF,
+               uint16_t               rxQueue   = 0xFFFF,
+               twai_filter_config_t*  fConfig   = nullptr,
+               twai_general_config_t* gConfig   = nullptr,
+               twai_timing_config_t*  tConfig   = nullptr);
 
     bool recover(void);
 
     bool restart(void);
-    
+
     // Pass frame either by reference or pointer; timeout in ms, you can pass 0 for non blocking
     inline bool IRAM_ATTR readFrame(CanFrame& frame, uint32_t timeout = 1000) { return readFrame(&frame, timeout); }
     inline bool IRAM_ATTR readFrame(CanFrame* frame, uint32_t timeout = 1000) {
@@ -131,19 +135,19 @@ class TwaiCAN {
 
     bool end();
 
- protected:
+  protected:
     twai_status_info_t status;
-    bool getStatusInfo();
+    bool               getStatusInfo();
 
- private:
-    bool init = false;
-    int8_t tx = 5;
-    int8_t rx = 4;
-    uint16_t txQueueSize = 5;
-    uint16_t rxQueueSize = 5;
-    TwaiSpeed speed = TWAI_SPEED_500KBPS;
+  private:
+    bool      init        = false;
+    int8_t    tx          = 5;
+    int8_t    rx          = 4;
+    uint16_t  txQueueSize = 5;
+    uint16_t  rxQueueSize = 5;
+    TwaiSpeed speed       = TWAI_SPEED_500KBPS;
 };
 
 extern TwaiCAN ESP32Can;
 
-#endif//ESP32_TWAI_CAN_HPP
+#endif // ESP32_TWAI_CAN_HPP

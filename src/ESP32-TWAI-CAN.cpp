@@ -1,13 +1,13 @@
 #include "ESP32-TWAI-CAN.hpp"
 
-
 void TwaiCAN::setSpeed(TwaiSpeed twaiSpeed) {
     if(twaiSpeed < TWAI_SPEED_SIZE) speed = twaiSpeed;
 }
 
+// clang-format off
 uint32_t TwaiCAN::getSpeedNumeric() { 
     uint32_t actualSpeed = 500;
-	switch(getSpeed()) {
+    switch(getSpeed()) {
         default: break;
         #if (SOC_TWAI_BRP_MAX > 256)
         case TWAI_SPEED_1KBPS   :   actualSpeed = 1   ; break;
@@ -19,20 +19,22 @@ uint32_t TwaiCAN::getSpeedNumeric() {
         case TWAI_SPEED_16KBPS  :   actualSpeed = 16  ; break;
         case TWAI_SPEED_20KBPS  :   actualSpeed = 20  ; break;
         #endif
-		case TWAI_SPEED_50KBPS  :   actualSpeed = 50  ; break;
-		case TWAI_SPEED_100KBPS :   actualSpeed = 100 ; break;
-		case TWAI_SPEED_125KBPS :   actualSpeed = 125 ; break;
-		case TWAI_SPEED_250KBPS :   actualSpeed = 250 ; break;
-		case TWAI_SPEED_500KBPS :   actualSpeed = 500 ; break;
-		case TWAI_SPEED_800KBPS :   actualSpeed = 800 ; break;
-		case TWAI_SPEED_1000KBPS:   actualSpeed = 1000; break;
-	}
+        case TWAI_SPEED_50KBPS  :   actualSpeed = 50  ; break;
+        case TWAI_SPEED_100KBPS :   actualSpeed = 100 ; break;
+        case TWAI_SPEED_125KBPS :   actualSpeed = 125 ; break;
+        case TWAI_SPEED_250KBPS :   actualSpeed = 250 ; break;
+        case TWAI_SPEED_500KBPS :   actualSpeed = 500 ; break;
+        case TWAI_SPEED_800KBPS :   actualSpeed = 800 ; break;
+        case TWAI_SPEED_1000KBPS:   actualSpeed = 1000; break;
+    }
     return actualSpeed;
 }
+// clang-format on
 
+// clang-format off
 TwaiSpeed TwaiCAN::convertSpeed(uint16_t canSpeed) { 
     TwaiSpeed actualSpeed = getSpeed();
-	switch(canSpeed) {
+    switch(canSpeed) {
         default: break;
         #if (SOC_TWAI_BRP_MAX > 256)
         case 1:     actualSpeed = TWAI_SPEED_1KBPS;     break;
@@ -45,19 +47,25 @@ TwaiSpeed TwaiCAN::convertSpeed(uint16_t canSpeed) {
         case 16:    actualSpeed = TWAI_SPEED_16KBPS;    break;
         case 20:    actualSpeed = TWAI_SPEED_20KBPS;    break;
         #endif
-		case 50:    actualSpeed = TWAI_SPEED_50KBPS;   break;
-		case 100:   actualSpeed = TWAI_SPEED_100KBPS;   break;
-		case 125:   actualSpeed = TWAI_SPEED_125KBPS;   break;
-		case 250:   actualSpeed = TWAI_SPEED_250KBPS;   break;
-		case 500:   actualSpeed = TWAI_SPEED_500KBPS;   break;
-		case 800:   actualSpeed = TWAI_SPEED_800KBPS;   break;
-		case 1000:  actualSpeed = TWAI_SPEED_1000KBPS;  break;
-	}
+        case 50:    actualSpeed = TWAI_SPEED_50KBPS;    break;
+        case 100:   actualSpeed = TWAI_SPEED_100KBPS;   break;
+        case 125:   actualSpeed = TWAI_SPEED_125KBPS;   break;
+        case 250:   actualSpeed = TWAI_SPEED_250KBPS;   break;
+        case 500:   actualSpeed = TWAI_SPEED_500KBPS;   break;
+        case 800:   actualSpeed = TWAI_SPEED_800KBPS;   break;
+        case 1000:  actualSpeed = TWAI_SPEED_1000KBPS;  break;
+    }
     return actualSpeed;
 }
+// clang-format on
 
-void TwaiCAN::setTxQueueSize(uint16_t txQueue) { if(txQueue != 0xFFFF) txQueueSize = txQueue; }
-void TwaiCAN::setRxQueueSize(uint16_t rxQueue) { if(rxQueue != 0xFFFF) rxQueueSize = rxQueue; }
+void TwaiCAN::setTxQueueSize(uint16_t txQueue) {
+    if(txQueue != 0xFFFF) txQueueSize = txQueue;
+}
+
+void TwaiCAN::setRxQueueSize(uint16_t rxQueue) {
+    if(rxQueue != 0xFFFF) rxQueueSize = rxQueue;
+}
 
 bool TwaiCAN::getStatusInfo() {
     return ESP_OK == twai_get_status_info(&status);
@@ -79,8 +87,7 @@ uint32_t TwaiCAN::inRxQueue() {
     return ret;
 };
 
-uint32_t TwaiCAN::rxErrorCounter()
-{
+uint32_t TwaiCAN::rxErrorCounter() {
     uint32_t ret = 0;
     if(getStatusInfo()) {
         ret = status.rx_error_counter;
@@ -88,8 +95,7 @@ uint32_t TwaiCAN::rxErrorCounter()
     return ret;
 };
 
-uint32_t TwaiCAN::txErrorCounter()
-{
+uint32_t TwaiCAN::txErrorCounter() {
     uint32_t ret = 0;
     if(getStatusInfo()) {
         ret = status.tx_error_counter;
@@ -97,8 +103,7 @@ uint32_t TwaiCAN::txErrorCounter()
     return ret;
 };
 
-uint32_t TwaiCAN::rxMissedCounter()
-{
+uint32_t TwaiCAN::rxMissedCounter() {
     uint32_t ret = 0;
     if(getStatusInfo()) {
         ret = status.rx_missed_count;
@@ -106,8 +111,7 @@ uint32_t TwaiCAN::rxMissedCounter()
     return ret;
 };
 
-uint32_t TwaiCAN::txFailedCounter()
-{
+uint32_t TwaiCAN::txFailedCounter() {
     uint32_t ret = 0;
     if(getStatusInfo()) {
         ret = status.tx_failed_count;
@@ -115,8 +119,7 @@ uint32_t TwaiCAN::txFailedCounter()
     return ret;
 };
 
-uint32_t TwaiCAN::busErrCounter()
-{
+uint32_t TwaiCAN::busErrCounter() {
     uint32_t ret = 0;
     if(getStatusInfo()) {
         ret = status.bus_error_count;
@@ -124,8 +127,7 @@ uint32_t TwaiCAN::busErrCounter()
     return ret;
 };
 
-uint32_t TwaiCAN::canState()
-{
+uint32_t TwaiCAN::canState() {
     uint32_t ret = 0;
     if(getStatusInfo()) {
         ret = (uint32_t)status.state;
@@ -133,14 +135,17 @@ uint32_t TwaiCAN::canState()
     return ret;
 };
 
-
 bool TwaiCAN::setPins(int8_t txPin, int8_t rxPin) {
     bool ret = !init;
 
-    if(txPin >= 0) tx = txPin;
-    else ret = false;
-    if(rxPin >= 0) rx = rxPin;
-    else ret = false;
+    if(txPin >= 0)
+        tx = txPin;
+    else
+        ret = false;
+    if(rxPin >= 0)
+        rx = rxPin;
+    else
+        ret = false;
 
     LOG_TWAI("Wrong pins or CAN bus running already!");
     return ret;
@@ -152,27 +157,22 @@ bool TwaiCAN::recover(void) {
         LOG_TWAI("CAN bus status read failed!");
         return false;
     }
-    switch(status.state)
-    {
-      case TWAI_STATE_BUS_OFF:
-      {
-        LOG_TWAI("Bus was off, starting recovery");
-        return twai_initiate_recovery();
-      }
-      case TWAI_STATE_RECOVERING:
-      {
-        // Already recovering, nothing to do
-        return true;
-      }
-      case TWAI_STATE_STOPPED:
-      {
-        // Stopped, nothing to do
-        return true;
-      }
-      default:
-      {
-        LOG_TWAI("Wrong state for recovery!");
-      }
+    switch(status.state) {
+        case TWAI_STATE_BUS_OFF: {
+            LOG_TWAI("Bus was off, starting recovery");
+            return twai_initiate_recovery();
+        }
+        case TWAI_STATE_RECOVERING: {
+            // Already recovering, nothing to do
+            return true;
+        }
+        case TWAI_STATE_STOPPED: {
+            // Stopped, nothing to do
+            return true;
+        }
+        default: {
+            LOG_TWAI("Wrong state for recovery!");
+        }
     }
 
     return false;
@@ -184,48 +184,51 @@ bool TwaiCAN::restart(void) {
         LOG_TWAI("CAN bus status read failed!");
         return false;
     }
-    switch(status.state)
-    {
-      case TWAI_STATE_STOPPED:
-      {
-        // Stopped, restart
-        return twai_start();
-      }
-      default:
-      {
-        LOG_TWAI("Wrong state for restart!");
-      }
+    switch(status.state) {
+        case TWAI_STATE_STOPPED: {
+            // Stopped, restart
+            return twai_start();
+        }
+        default: {
+            LOG_TWAI("Wrong state for restart!");
+        }
     }
 
     return false;
 }
 
-bool TwaiCAN::begin(TwaiSpeed twaiSpeed, 
-                    int8_t txPin, int8_t rxPin,
-                    uint16_t txQueue, uint16_t rxQueue,
+bool TwaiCAN::begin(TwaiSpeed              twaiSpeed,
+                    int8_t                 txPin,
+                    int8_t                 rxPin,
+                    uint16_t               txQueue,
+                    uint16_t               rxQueue,
                     twai_filter_config_t*  fConfig,
                     twai_general_config_t* gConfig,
-                    twai_timing_config_t*  tConfig)
-                    {
-
+                    twai_timing_config_t*  tConfig) {
     bool ret = false;
     if(end()) {
         init = true;
         setSpeed(twaiSpeed);
         setPins(txPin, rxPin);
-        
+
         gpio_reset_pin((gpio_num_t)rx);
         gpio_reset_pin((gpio_num_t)tx);
 
         setTxQueueSize(txQueue);
         setRxQueueSize(rxQueue);
 
-        twai_general_config_t g_config = {.mode = TWAI_MODE_NORMAL, .tx_io = (gpio_num_t) tx, .rx_io = (gpio_num_t) rx, \
-                                                .clkout_io = TWAI_IO_UNUSED, .bus_off_io = TWAI_IO_UNUSED,      \
-                                                .tx_queue_len = txQueueSize, .rx_queue_len = rxQueueSize,       \
-                                                .alerts_enabled = TWAI_ALERT_NONE,  .clkout_divider = 0,        \
-                                                .intr_flags = ESP_INTR_FLAG_LEVEL1};
+        twai_general_config_t g_config = {.mode           = TWAI_MODE_NORMAL,
+                                          .tx_io          = (gpio_num_t)tx,
+                                          .rx_io          = (gpio_num_t)rx,
+                                          .clkout_io      = TWAI_IO_UNUSED,
+                                          .bus_off_io     = TWAI_IO_UNUSED,
+                                          .tx_queue_len   = txQueueSize,
+                                          .rx_queue_len   = rxQueueSize,
+                                          .alerts_enabled = TWAI_ALERT_NONE,
+                                          .clkout_divider = 0,
+                                          .intr_flags     = ESP_INTR_FLAG_LEVEL1};
 
+        // clang-format off
         twai_timing_config_t t_config[TWAI_SPEED_SIZE] = {
             #if (SOC_TWAI_BRP_MAX > 256)
             TWAI_TIMING_CONFIG_1KBITS(),
@@ -245,6 +248,7 @@ bool TwaiCAN::begin(TwaiSpeed twaiSpeed,
             TWAI_TIMING_CONFIG_800KBITS(),
             TWAI_TIMING_CONFIG_1MBITS()
         };
+        // clang-format on
 
         twai_filter_config_t f_config = TWAI_FILTER_CONFIG_ACCEPT_ALL();
 
@@ -252,15 +256,15 @@ bool TwaiCAN::begin(TwaiSpeed twaiSpeed,
         if(!tConfig) tConfig = &t_config[speed];
         if(!fConfig) fConfig = &f_config;
 
-            //Install TWAI driver
-        if (twai_driver_install(gConfig, tConfig, fConfig) == ESP_OK) {
+        // Install TWAI driver
+        if(twai_driver_install(gConfig, tConfig, fConfig) == ESP_OK) {
             LOG_TWAI("Driver installed");
         } else {
             LOG_TWAI("Failed to install driver");
         }
 
-        //Start TWAI driver
-        if (twai_start() == ESP_OK) {
+        // Start TWAI driver
+        if(twai_start() == ESP_OK) {
             LOG_TWAI("Driver started");
             ret = true;
         } else {
@@ -271,20 +275,19 @@ bool TwaiCAN::begin(TwaiSpeed twaiSpeed,
     return ret;
 }
 
-
 bool TwaiCAN::end() {
     bool ret = false;
     if(init) {
-        //Stop the TWAI driver
-        if (twai_stop() == ESP_OK) {
+        // Stop the TWAI driver
+        if(twai_stop() == ESP_OK) {
             LOG_TWAI("Driver stopped\n");
             ret = true;
         } else {
             LOG_TWAI("Failed to stop driver\n");
         }
 
-        //Uninstall the TWAI driver
-        if (twai_driver_uninstall() == ESP_OK) {
+        // Uninstall the TWAI driver
+        if(twai_driver_uninstall() == ESP_OK) {
             LOG_TWAI("Driver uninstalled\n");
             ret &= true;
         } else {
@@ -292,7 +295,8 @@ bool TwaiCAN::end() {
             ret &= false;
         }
         init = !ret;
-    } else ret = true;
+    } else
+        ret = true;
     return ret;
 }
 
