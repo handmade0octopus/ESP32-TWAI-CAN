@@ -1,7 +1,7 @@
 {
     "name": "ESP32-TWAI-CAN",
     "keywords": "can, twai, esp32, esp32-s3, esp32-s2, driver, arduino",
-    "description": "ESP32 driver for TWAI / CAN for Adruino using ESP-IDF drivers.",
+    "description": "ESP32 driver for TWAI / CAN for Arduino using ESP-IDF drivers.",
     "version": "1.0.2",
     "repository": {
         "type": "git",

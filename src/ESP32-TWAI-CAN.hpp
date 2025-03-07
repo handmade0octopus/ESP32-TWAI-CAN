@@ -4,7 +4,7 @@
 /**
  * @file ESP32-TWAI-CAN.hpp
  * @author sorek (contact@sorek.uk)
- * @brief ESP32 driver for TWAI / CAN for Adruino using ESP-IDF drivers.
+ * @brief ESP32 driver for TWAI / CAN for Arduino using ESP-IDF drivers.
  * @version 1.0
  * @date 2023-12-15
  * 
