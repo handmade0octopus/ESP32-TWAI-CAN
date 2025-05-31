@@ -23,6 +23,7 @@
 # include "inttypes.h"
 #endif
 
+//#define ESP_INTR_FLAG_IRAM 
 #include "driver/twai.h"
 
 // Uncomment or declare before importing header
@@ -40,6 +41,12 @@
 
 #ifndef LOG_TWAI_RX
 # define LOG_TWAI_RX
+#endif
+
+#if CONFIG_TWAI_ISR_IN_IRAM
+#define IRAM_ATTR_TWAI IRAM_ATTR
+#else
+#define IRAM_ATTR_TWAI
 #endif
 
 typedef twai_message_t CanFrame;
@@ -112,8 +119,8 @@ class TwaiCAN {
     bool restart(void);
 
     // Pass frame either by reference or pointer; timeout in ms, you can pass 0 for non blocking
-    inline bool IRAM_ATTR readFrame(CanFrame& frame, uint32_t timeout = 1000) { return readFrame(&frame, timeout); }
-    inline bool IRAM_ATTR readFrame(CanFrame* frame, uint32_t timeout = 1000) {
+    inline bool IRAM_ATTR_TWAI readFrame(CanFrame& frame, uint32_t timeout = 1000) { return readFrame(&frame, timeout); }
+    inline bool IRAM_ATTR_TWAI readFrame(CanFrame* frame, uint32_t timeout = 1000) {
         bool ret = false;
         if((frame) && twai_receive(frame, pdMS_TO_TICKS(timeout)) == ESP_OK) {
             LOG_TWAI_RX("Frame received %03X", frame->identifier);
@@ -123,8 +130,8 @@ class TwaiCAN {
     }
 
     // Pass frame either by reference or pointer; timeout in ms, you can pass 0 for non blocking
-    inline bool IRAM_ATTR writeFrame(CanFrame& frame, uint32_t timeout = 1) { return writeFrame(&frame, timeout); }
-    inline bool IRAM_ATTR writeFrame(CanFrame* frame, uint32_t timeout = 1) {
+    inline bool IRAM_ATTR_TWAI writeFrame(const CanFrame& frame, uint32_t timeout = 1) { return writeFrame(&frame, timeout); }
+    inline bool IRAM_ATTR_TWAI writeFrame(const CanFrame* frame, uint32_t timeout = 1) {
         bool ret = false;
         if((frame) && twai_transmit(frame, pdMS_TO_TICKS(timeout)) == ESP_OK) {
             LOG_TWAI_TX("Frame sent     %03X", frame->identifier);
