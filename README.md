@@ -1,3 +1,35 @@
+
+<div align="right">
+  <details>
+    <summary >🌐 Language</summary>
+    <div>
+      <div align="center">
+        <a href="https://openaitx.github.io/view.html?user=handmade0octopus&project=ESP32-TWAI-CAN&lang=en">English</a>
+        | <a href="https://openaitx.github.io/view.html?user=handmade0octopus&project=ESP32-TWAI-CAN&lang=zh-CN">简体中文</a>
+        | <a href="https://openaitx.github.io/view.html?user=handmade0octopus&project=ESP32-TWAI-CAN&lang=zh-TW">繁體中文</a>
+        | <a href="https://openaitx.github.io/view.html?user=handmade0octopus&project=ESP32-TWAI-CAN&lang=ja">日本語</a>
+        | <a href="https://openaitx.github.io/view.html?user=handmade0octopus&project=ESP32-TWAI-CAN&lang=ko">한국어</a>
+        | <a href="https://openaitx.github.io/view.html?user=handmade0octopus&project=ESP32-TWAI-CAN&lang=hi">हिन्दी</a>
+        | <a href="https://openaitx.github.io/view.html?user=handmade0octopus&project=ESP32-TWAI-CAN&lang=th">ไทย</a>
+        | <a href="https://openaitx.github.io/view.html?user=handmade0octopus&project=ESP32-TWAI-CAN&lang=fr">Français</a>
+        | <a href="https://openaitx.github.io/view.html?user=handmade0octopus&project=ESP32-TWAI-CAN&lang=de">Deutsch</a>
+        | <a href="https://openaitx.github.io/view.html?user=handmade0octopus&project=ESP32-TWAI-CAN&lang=es">Español</a>
+        | <a href="https://openaitx.github.io/view.html?user=handmade0octopus&project=ESP32-TWAI-CAN&lang=it">Italiano</a>
+        | <a href="https://openaitx.github.io/view.html?user=handmade0octopus&project=ESP32-TWAI-CAN&lang=ru">Русский</a>
+        | <a href="https://openaitx.github.io/view.html?user=handmade0octopus&project=ESP32-TWAI-CAN&lang=pt">Português</a>
+        | <a href="https://openaitx.github.io/view.html?user=handmade0octopus&project=ESP32-TWAI-CAN&lang=nl">Nederlands</a>
+        | <a href="https://openaitx.github.io/view.html?user=handmade0octopus&project=ESP32-TWAI-CAN&lang=pl">Polski</a>
+        | <a href="https://openaitx.github.io/view.html?user=handmade0octopus&project=ESP32-TWAI-CAN&lang=ar">العربية</a>
+        | <a href="https://openaitx.github.io/view.html?user=handmade0octopus&project=ESP32-TWAI-CAN&lang=fa">فارسی</a>
+        | <a href="https://openaitx.github.io/view.html?user=handmade0octopus&project=ESP32-TWAI-CAN&lang=tr">Türkçe</a>
+        | <a href="https://openaitx.github.io/view.html?user=handmade0octopus&project=ESP32-TWAI-CAN&lang=vi">Tiếng Việt</a>
+        | <a href="https://openaitx.github.io/view.html?user=handmade0octopus&project=ESP32-TWAI-CAN&lang=id">Bahasa Indonesia</a>
+        | <a href="https://openaitx.github.io/view.html?user=handmade0octopus&project=ESP32-TWAI-CAN&lang=as">অসমীয়া</
+      </div>
+    </div>
+  </details>
+</div>
+
 # ESP32-TWAI-CAN
 
 ESP32 driver library for TWAI / CAN for Arduino using ESP-IDF drivers.
