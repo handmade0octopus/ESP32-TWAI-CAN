@@ -8,10 +8,12 @@ there is no second doc to drift against.
 ## What This Library Does
 
 Minimal Arduino-style wrapper over the ESP-IDF TWAI (CAN 2.0) controller
-driver. `CanFrame` **is** `twai_message_t` — there is no conversion layer.
-`TwaiCAN` handles driver install/start/stop/uninstall, speed/pin/queue
-configuration, status counters, and bus recovery. A global `ESP32Can`
-singleton instance is provided and is what Gauge.S uses everywhere.
+driver. `CanFrame` **is** `twai_message_t` on single-controller chips — there
+is no conversion layer. `TwaiCAN` handles driver install/start/stop/uninstall,
+speed/pin/queue configuration, status counters, and bus recovery. A global
+`ESP32Can` singleton instance is provided and is what Gauge.S uses everywhere;
+multi-controller chips (ESP32-C6) additionally get `CAN1`/`CAN2` instances
+(see "Driver Paths").
 
 **It does NOT**: decode protocols (OBD-II/KWP live in CarDataS), do acceptance
 filtering beyond the config you pass in, or support CAN FD.
@@ -38,10 +40,47 @@ recommended). Tested on ESP32 and ESP32-S3; builds for any ESP32 variant with
 a TWAI peripheral (S2, C3, ...). The speed-enum low-bitrate entries are
 compile-time gated on `SOC_TWAI_BRP_MAX` / `CONFIG_ESP32_REV_MIN_FULL`.
 
+## Driver Paths (legacy vs new, v1.1.0)
+
+Selected at compile time in the header:
+
+```cpp
+#if defined(SOC_TWAI_CONTROLLER_NUM) && (SOC_TWAI_CONTROLLER_NUM > 1) && __has_include(<esp_twai_onchip.h>)
+#define TWAI_CAN_NEW_DRIVER 1   // esp_twai.h handle-based driver (IDF 5.5+)
+#else
+#include "driver/twai.h"        // legacy single-instance driver
+#endif
+```
+
+- **Legacy path** (ESP32, S2, S3, C3 — Gauge.S): unchanged behavior;
+  `begin()` accepts custom `twai_filter_config_t*`/`twai_general_config_t*`/
+  `twai_timing_config_t*`.
+- **New path** (chips with >1 TWAI controller, currently ESP32-C6 —
+  CanBridge.S): each `TwaiCAN` instance creates its own `twai_node_handle_t`
+  via `twai_new_node_onchip()`; the driver hands out the next free controller,
+  so two instances = both controllers. Differences:
+  - `fConfig`/`gConfig`/`tConfig` params of `begin()` are IGNORED (accept-all
+    filter; timing derived from the bitrate — exact 12.5 k support included).
+  - RX: an internal FreeRTOS queue of `CanFrame` is filled from the ISR
+    `on_rx_done` callback via `twai_node_receive_from_isr()`, preserving the
+    blocking `readFrame(timeout)` semantics of the legacy path.
+  - TX: the new driver reads the payload asynchronously, so `writeFrame()`
+    copies frames into per-instance shadow slots freed from the `on_tx_done`
+    ISR callback. **All writes to one instance must come from a single task.**
+  - `CanFrame` is a layout-identical mirror struct (the legacy header is not
+    included); `TWAI_STATE_*` constants are provided with identical values.
+  - `canState()` maps the new error states onto the legacy numbers and reports
+    `TWAI_STATE_RECOVERING` while a `recover()` initiated recovery is pending.
+  - `inTxQueue()` counts busy TX shadow slots; `rxMissedCounter()` counts
+    RX queue-full drops; `txFailedCounter()` counts failed/`txShadow`-starved
+    writes.
+
 ## Types
 
 ```cpp
-typedef twai_message_t CanFrame;   // the IDF struct, used directly
+// legacy path: the IDF struct, used directly
+typedef twai_message_t CanFrame;
+// new path: layout-identical mirror struct (see "Driver Paths")
 // fields: identifier, extd, rtr, ss, self, data_length_code, data[8]
 ```
 
@@ -121,10 +160,12 @@ uint32_t canState();         // raw twai_state_t as uint32
 Gauge.S maps `canState()` for the web UI as: 1 = RUNNING, 2 = BUS_OFF,
 3 = RECOVERING, anything else = STOPPED (see `src/wifi/NetworkHandler.hpp`).
 
-Global instance:
+Global instances:
 
 ```cpp
-extern TwaiCAN ESP32Can;   // defined in ESP32-TWAI-CAN.cpp
+extern TwaiCAN CAN1;            // multi-controller chips: controller 0
+extern TwaiCAN CAN2;            // multi-controller chips: controller 1
+extern TwaiCAN& ESP32Can;       // alias of CAN1; Gauge.S keeps using this
 ```
 
 ## Quick Start
@@ -220,7 +261,7 @@ All logging macros default to empty (zero cost). Define before the include:
 - Two files under `src/` (`ESP32-TWAI-CAN.hpp` + `ESP32-TWAI-CAN.cpp`);
   `library.json` `srcFilter` builds only the .cpp.
 - No dynamic allocation, no STL — C-style wrapper over the IDF driver.
-- Version lives in `library.json` (1.0.3) — keep `library.properties` in sync.
+- Version lives in `library.json` (1.1.0) — keep `library.properties` in sync.
 - ESP32/Arduino-only by design (wraps the IDF TWAI driver); the WASM simulator
   does not build it — protocol logic above it (CarDataS KWP/OBD) is
   driver-agnostic instead.
@@ -232,7 +273,7 @@ lib/ESP32-TWAI-CAN/
   src/ESP32-TWAI-CAN.hpp            -- TwaiCAN class, CanFrame typedef, TwaiSpeed enum
   src/ESP32-TWAI-CAN.cpp            -- implementation + ESP32Can singleton definition
   examples/OBD2-query/OBD2-query.ino  -- request/response demo
-  library.json                      -- PlatformIO manifest (v1.0.3)
+  library.json                      -- PlatformIO manifest (v1.1.0)
   library.properties                -- Arduino IDE manifest
   keywords.txt                      -- Arduino IDE syntax highlighting
   LICENSE                           -- MIT
