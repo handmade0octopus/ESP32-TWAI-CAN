@@ -52,7 +52,7 @@
 # define LOG_TWAI_RX
 #endif
 
-#if CONFIG_TWAI_ISR_IN_IRAM
+#if CONFIG_TWAI_ISR_IN_IRAM || CONFIG_TWAI_ISR_CACHE_SAFE
 #define IRAM_ATTR_TWAI IRAM_ATTR
 #else
 #define IRAM_ATTR_TWAI
@@ -90,6 +90,15 @@ struct CanFrame {
     };
     uint8_t data_length_code;
     uint8_t data[8];
+};
+
+typedef bool (*TwaiFrameObserver)(const CanFrame& frame, bool transmitted, uint32_t stampMs, void* context);
+
+struct TwaiDiagnostics {
+    uint32_t accepted, completed, failed, rejected;
+    uint32_t rxMissed, busErrors;
+    uint16_t txErrors, rxErrors;
+    int errorState;
 };
 
 /* Legacy driver states, kept numerically identical (driver/twai.h) so
@@ -166,6 +175,13 @@ class TwaiCAN {
     uint32_t busErrCounter();
     uint32_t canState();
 
+#ifdef TWAI_CAN_NEW_DRIVER
+    // Optional ISR observer of received and successfully transmitted frames.
+    // Set before begin(); observer must be IRAM-safe when cache-safe ISR is enabled.
+    void setFrameObserver(TwaiFrameObserver observer, void* context) { frameObserver = observer; observerContext = context; }
+    bool getDiagnostics(TwaiDiagnostics* out);
+#endif
+
     bool setPins(int8_t txPin, int8_t rxPin);
 
     // Everything is defaulted so you can just call .begin() or .begin(TwaiSpeed)
@@ -211,19 +227,23 @@ class TwaiCAN {
 #ifdef TWAI_CAN_NEW_DRIVER
     /* The new driver DMA-reads the payload after the call returns, so frames
      * are copied into per-instance shadow slots (freed from the on_tx_done
-     * ISR callback). All writes to one instance must come from a single task. */
+     * ISR callback). Slot claims are serialized; copying and driver waits are
+     * outside the lock. Serialize begin()/end() against all frame I/O. */
     inline bool IRAM_ATTR_TWAI writeFrame(const CanFrame& frame, uint32_t timeout = 1) {
         bool ret = false;
-        if(node && txShadow) {
+        if(node && txShadow && frame.data_length_code <= 8 &&
+           frame.identifier <= (frame.extd ? 0x1FFFFFFFu : 0x7FFu)) {
             TxShadow* slot = nullptr;
+            portENTER_CRITICAL(&txMux);
             for(uint16_t i = 0; i < txShadowCount; i++) {
                 if(!txShadow[i].busy) {
                     slot = &txShadow[i];
+                    slot->busy = true;
                     break;
                 }
             }
+            portEXIT_CRITICAL(&txMux);
             if(slot) {
-                slot->busy = true;
                 memcpy(slot->data, frame.data, frame.data_length_code);
                 slot->frame.header.id  = frame.identifier;
                 slot->frame.header.ide = frame.extd;
@@ -233,13 +253,23 @@ class TwaiCAN {
                 slot->frame.buffer_len = frame.data_length_code;
                 int tmo                = (timeout == (uint32_t)portMAX_DELAY) ? -1 : (int)timeout;
                 if(twai_node_transmit(node, &slot->frame, tmo) == ESP_OK) {
+                    portENTER_CRITICAL(&txMux);
+                    txAccepted = txAccepted + 1;
+                    portEXIT_CRITICAL(&txMux);
                     LOG_TWAI_TX("Frame sent     %03X", frame.identifier);
                     ret = true;
-                } else
+                } else {
+                    portENTER_CRITICAL(&txMux);
                     slot->busy = false;
+                    portEXIT_CRITICAL(&txMux);
+                }
             }
         }
-        if(!ret) txFailed = txFailed + 1;
+        if(!ret) {
+            portENTER_CRITICAL(&txMux);
+            txFailed = txFailed + 1;
+            portEXIT_CRITICAL(&txMux);
+        }
         return ret;
     }
 #else
@@ -275,10 +305,16 @@ class TwaiCAN {
 
     twai_node_handle_t node          = nullptr;
     QueueHandle_t      rxQueue       = nullptr;
+    TwaiFrameObserver  frameObserver = nullptr;
+    void*              observerContext = nullptr;
     TxShadow*          txShadow      = nullptr;
     uint16_t           txShadowCount = 0;
+    portMUX_TYPE       txMux = portMUX_INITIALIZER_UNLOCKED;
     volatile uint32_t  rxMissed      = 0;
     volatile uint32_t  txFailed      = 0;
+    volatile uint32_t  txAccepted    = 0;
+    volatile uint32_t  txCompleted   = 0;
+    volatile uint32_t  txBusFailed   = 0;
     volatile bool      recovering    = false;
 #endif
     bool      init        = false;

@@ -34,6 +34,8 @@ uint32_t TwaiCAN::getSpeedNumeric() {
 
 #ifdef TWAI_CAN_NEW_DRIVER
 
+#include "esp_timer.h"
+
 /* Exact bit/s for the new driver (getSpeedNumeric() rounds 12.5k down to 12). */
 static uint32_t speedToBps(TwaiSpeed s) {
     switch(s) {
@@ -114,8 +116,11 @@ bool IRAM_ATTR_TWAI TwaiCAN::rxDoneCb(twai_node_handle_t handle, const twai_rx_d
         cf.extd             = rf.header.ide;
         cf.rtr              = rf.header.rtr;
         cf.data_length_code = (uint8_t)(rf.header.dlc > 8 ? 8 : rf.header.dlc);
-        memcpy(cf.data, buf, cf.data_length_code);
+        if(!cf.rtr) memcpy(cf.data, buf, cf.data_length_code);
+        bool observed = self->frameObserver && self->frameObserver(cf, false,
+            (uint32_t)(esp_timer_get_time() / 1000), self->observerContext);
         if(!xQueueSendFromISR(self->rxQueue, &cf, &woken)) self->rxMissed = self->rxMissed + 1;
+        if(observed) woken = pdTRUE;
     }
     return woken == pdTRUE;
 }
@@ -123,23 +128,63 @@ bool IRAM_ATTR_TWAI TwaiCAN::rxDoneCb(twai_node_handle_t handle, const twai_rx_d
 bool IRAM_ATTR_TWAI TwaiCAN::txDoneCb(twai_node_handle_t handle, const twai_tx_done_event_data_t* edata, void* ctx) {
     (void)handle;
     TwaiCAN* self = (TwaiCAN*)ctx;
+    bool woken = false;
+    portENTER_CRITICAL_ISR(&self->txMux);
+    if(edata->is_tx_success) self->txCompleted = self->txCompleted + 1;
+    else self->txBusFailed = self->txBusFailed + 1;
+    portEXIT_CRITICAL_ISR(&self->txMux);
+    if(self->frameObserver && edata->is_tx_success && edata->done_tx_frame) {
+        const twai_frame_t* f = edata->done_tx_frame;
+        CanFrame frame = {};
+        frame.identifier = f->header.id;
+        frame.extd = f->header.ide;
+        frame.rtr = f->header.rtr;
+        frame.data_length_code = (uint8_t)(f->header.dlc > 8 ? 8 : f->header.dlc);
+        if(!frame.rtr) memcpy(frame.data, f->buffer, frame.data_length_code);
+        woken = self->frameObserver(frame, true, (uint32_t)(esp_timer_get_time() / 1000), self->observerContext);
+    }
     if(self->txShadow && edata->done_tx_frame) {
         const uint8_t* done = edata->done_tx_frame->buffer;
+        portENTER_CRITICAL_ISR(&self->txMux);
         for(uint16_t i = 0; i < self->txShadowCount; i++) {
             if(self->txShadow[i].frame.buffer == done) {
                 self->txShadow[i].busy = false;
                 break;
             }
         }
+        portEXIT_CRITICAL_ISR(&self->txMux);
     }
-    return false;
+    return woken;
+}
+
+bool TwaiCAN::getDiagnostics(TwaiDiagnostics* out) {
+    if(!out) return false;
+    *out = {};
+    portENTER_CRITICAL(&txMux);
+    out->accepted = txAccepted;
+    out->completed = txCompleted;
+    out->failed = txBusFailed;
+    out->rejected = txFailed;
+    out->rxMissed = rxMissed;
+    portEXIT_CRITICAL(&txMux);
+    out->errorState = -1;
+    twai_node_status_t status;
+    twai_node_record_t record;
+    if(!node || twai_node_get_info(node, &status, &record) != ESP_OK) return false;
+    out->errorState = (int)status.state;
+    out->txErrors = status.tx_error_count;
+    out->rxErrors = status.rx_error_count;
+    out->busErrors = record.bus_err_num;
+    return true;
 }
 
 uint32_t TwaiCAN::inTxQueue() {
     uint32_t ret = 0;
+    portENTER_CRITICAL(&txMux);
     for(uint16_t i = 0; i < txShadowCount; i++) {
         if(txShadow[i].busy) ret++;
     }
+    portEXIT_CRITICAL(&txMux);
     return ret;
 };
 
@@ -188,8 +233,9 @@ bool TwaiCAN::recover(void) {
     }
     if(st.state == TWAI_ERROR_BUS_OFF) {
         LOG_TWAI("Bus was off, starting recovery");
-        recovering = true;
-        return twai_node_recover(node) == ESP_OK;
+        if(recovering) return true;
+        recovering = twai_node_recover(node) == ESP_OK;
+        return recovering;
     }
     // Already ok (or recovering), nothing to do
     return true;
@@ -250,10 +296,9 @@ bool TwaiCAN::begin(TwaiSpeed            twaiSpeed,
                 twai_event_callbacks_t cbs = {};
                 cbs.on_rx_done = rxDoneCb;
                 cbs.on_tx_done = txDoneCb;
-                twai_node_register_event_callbacks(node, &cbs, this);
-
                 // Start TWAI node
-                if(twai_node_enable(node) == ESP_OK) {
+                if(twai_node_register_event_callbacks(node, &cbs, this) == ESP_OK &&
+                   twai_node_enable(node) == ESP_OK) {
                     LOG_TWAI("Driver started");
                     ret = true;
                 } else {
@@ -365,7 +410,6 @@ uint32_t TwaiCAN::canState() {
 };
 
 bool TwaiCAN::recover(void) {
-    uint32_t ret = 0;
     if(!getStatusInfo()) {
         LOG_TWAI("CAN bus status read failed!");
         return false;
@@ -373,7 +417,7 @@ bool TwaiCAN::recover(void) {
     switch(status.state) {
         case TWAI_STATE_BUS_OFF: {
             LOG_TWAI("Bus was off, starting recovery");
-            return twai_initiate_recovery();
+            return twai_initiate_recovery() == ESP_OK;
         }
         case TWAI_STATE_RECOVERING: {
             // Already recovering, nothing to do
@@ -392,7 +436,6 @@ bool TwaiCAN::recover(void) {
 }
 
 bool TwaiCAN::restart(void) {
-    uint32_t ret = 0;
     if(!getStatusInfo()) {
         LOG_TWAI("CAN bus status read failed!");
         return false;
@@ -400,7 +443,7 @@ bool TwaiCAN::restart(void) {
     switch(status.state) {
         case TWAI_STATE_STOPPED: {
             // Stopped, restart
-            return twai_start();
+            return twai_start() == ESP_OK;
         }
         default: {
             LOG_TWAI("Wrong state for restart!");

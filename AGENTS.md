@@ -66,7 +66,9 @@ Selected at compile time in the header:
     blocking `readFrame(timeout)` semantics of the legacy path.
   - TX: the new driver reads the payload asynchronously, so `writeFrame()`
     copies frames into per-instance shadow slots freed from the `on_tx_done`
-    ISR callback. **All writes to one instance must come from a single task.**
+    ISR callback. Slot claims/releases are protected by a per-instance critical
+    section, so task callers may write concurrently. Copying and driver waits
+    are outside the lock. Serialize lifecycle/configuration against frame I/O.
   - `CanFrame` is a layout-identical mirror struct (the legacy header is not
     included); `TWAI_STATE_*` constants are provided with identical values.
   - `canState()` maps the new error states onto the legacy numbers and reports
@@ -76,6 +78,33 @@ Selected at compile time in the header:
     writes.
 
 ## Types
+
+### Additive Observation and Diagnostics
+
+Existing frame I/O, lifecycle signatures, defaults, and `TWAI_STATE_*` numeric
+values are retained. The new-driver path additionally provides:
+
+```cpp
+void setFrameObserver(TwaiFrameObserver observer, void* context);
+bool getDiagnostics(TwaiDiagnostics* out);
+```
+
+Set the optional observer before `begin()`. It is called in ISR context for RX
+and successfully completed TX, with a frame reference, a transmitted flag,
+millisecond timestamp, and the caller's context. Copy the frame before returning;
+do not retain its reference. Return whether a higher-priority task was woken.
+The callback and its dependencies must be IRAM-safe when cache-safe TWAI ISR
+support is enabled. No observer is installed by default.
+
+Diagnostics distinguish accepted/completed/bus-failed/rejected TX and expose
+the raw driver error state, RX drops, and error counters. Existing
+`txFailedCounter()` remains a rejected-write counter, and `canState()` retains
+its legacy mapping. Concurrent task writers are supported by atomic slot claims;
+`begin()`/`end()` must still be serialized against all I/O. This does not make
+`writeFrame()` an ISR API.
+Callback-registration failure now fails initialization. Legacy `recover()` and
+`restart()` return true for `ESP_OK`, correcting their former inverted success
+result without changing their signatures.
 
 ```cpp
 // legacy path: the IDF struct, used directly

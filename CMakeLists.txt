@@ -3,4 +3,5 @@
 idf_component_register(SRCS "src/ESP32-TWAI-CAN.cpp"
                        INCLUDE_DIRS "src"
                        REQUIRES esp_driver_twai
-                                esp_driver_gpio)
+                                esp_driver_gpio
+                                esp_timer)
