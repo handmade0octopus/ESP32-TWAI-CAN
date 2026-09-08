@@ -52,7 +52,7 @@ Selected at compile time in the header:
 #endif
 ```
 
-- **Legacy path** (ESP32, S2, S3, C3 — Gauge.S): unchanged behavior;
+- **Legacy path** (ESP32, S2, S3, C3 — Gauge.S): existing frame/config API;
   `begin()` accepts custom `twai_filter_config_t*`/`twai_general_config_t*`/
   `twai_timing_config_t*`.
 - **New path** (chips with >1 TWAI controller, currently ESP32-C6 —
@@ -69,10 +69,14 @@ Selected at compile time in the header:
     ISR callback. Slot claims/releases are protected by a per-instance critical
     section, so task callers may write concurrently. Copying and driver waits
     are outside the lock. Serialize lifecycle/configuration against frame I/O.
-  - `CanFrame` is a layout-identical mirror struct (the legacy header is not
-    included); `TWAI_STATE_*` constants are provided with identical values.
+  - `CanFrame` preserves named frame fields, NOT the legacy binary layout
+    (the legacy header is not included). Do not cast or serialize it as
+    `twai_message_t`. `TWAI_STATE_*` constants retain their numeric values.
   - `canState()` maps the new error states onto the legacy numbers and reports
     `TWAI_STATE_RECOVERING` while a `recover()` initiated recovery is pending.
+    The state-change ISR clears completed recovery even if no task samples the
+    intermediate running state before another bus-off. Recovery bookkeeping
+    uses the existing per-instance lock; the IDF recovery command is nonblocking.
   - `inTxQueue()` counts busy TX shadow slots; `rxMissedCounter()` counts
     RX queue-full drops; `txFailedCounter()` counts failed/`txShadow`-starved
     writes.
@@ -109,7 +113,7 @@ result without changing their signatures.
 ```cpp
 // legacy path: the IDF struct, used directly
 typedef twai_message_t CanFrame;
-// new path: layout-identical mirror struct (see "Driver Paths")
+// new path: named-field compatibility only (see "Driver Paths")
 // fields: identifier, extd, rtr, ss, self, data_length_code, data[8]
 ```
 
@@ -157,6 +161,17 @@ bool recover();    // BUS_OFF -> twai_initiate_recovery(); RECOVERING/STOPPED ->
 bool restart();    // STOPPED -> twai_start()
 ```
 
+Legacy installation ownership starts only after successful driver installation.
+A failed install never starts or uninstalls someone else's driver. `end()` is
+idempotent after successful uninstall, including from STOPPED/BUS_OFF; failed
+uninstall retains ownership so a later `end()`/`begin()` can retry. Start failure
+unwinds the installation. RECOVERING is not uninstallable: let recovery finish
+first. On the new path, failed node deletion retains its RX queue and TX shadow
+storage, rather than freeing memory still referenced by the SDK callbacks.
+Diagnostics remain safe after partial allocation failure, including when node
+deletion fails. Successful teardown clears the shadow-slot count even when no
+shadow array was allocated; failed deletion retains existing storage/count.
+
 `begin()` details (from the .cpp): calls `end()` first, applies speed/pins/
 queues, `gpio_reset_pin()` on both pins, installs with `TWAI_MODE_NORMAL`,
 `TWAI_ALERT_NONE`, accept-all filter, timing from an internal table indexed by
@@ -164,7 +179,8 @@ queues, `gpio_reset_pin()` on both pins, installs with `TWAI_MODE_NORMAL`,
 `ESP_INTR_FLAG_LEVEL1`. On install/start failure it calls `end()` and returns
 false.
 
-Frame I/O (reference and pointer overloads; timeout in ms, 0 = non-blocking):
+Frame I/O (reference and pointer overloads; timeout in ms, 0 = non-blocking,
+`(uint32_t)portMAX_DELAY` = infinite SDK wait without millisecond conversion):
 
 ```cpp
 bool readFrame(CanFrame& frame, uint32_t timeout = 1000);
@@ -172,6 +188,12 @@ bool readFrame(CanFrame* frame, uint32_t timeout = 1000);   // nullptr-safe
 bool writeFrame(const CanFrame& frame, uint32_t timeout = 1);
 bool writeFrame(const CanFrame* frame, uint32_t timeout = 1); // nullptr-safe
 ```
+
+The new path still rejects immediately if its shadow slots are all busy; the
+timeout applies to SDK submission only after claiming a slot. New-driver TX
+translates ID/IDE/RTR/DLC/data, not legacy `ss`/`self`/`dlc_non_comp` behavior.
+RX and TX observers receive temporary frame references and software callback
+timestamps, not hardware timestamps or a timestamp retained by `readFrame()`.
 
 Status (all return 0 when `twai_get_status_info()` fails):
 
@@ -186,16 +208,31 @@ uint32_t busErrCounter();
 uint32_t canState();         // raw twai_state_t as uint32
 ```
 
+Legacy-only caller-owned status snapshot (additive API):
+
+```cpp
+bool getStatus(twai_status_info_t* out);
+```
+
+Pass a separate local buffer per caller. This delegates directly to the legacy
+SDK without using the mutable buffer behind the old individual getters. False
+means nullptr or SDK failure (including no installed driver); consume `out`
+only after true. Existing individual getters/signatures remain available.
+Lifecycle must still be serialized against status reads and other frame I/O.
+
 Gauge.S maps `canState()` for the web UI as: 1 = RUNNING, 2 = BUS_OFF,
 3 = RECOVERING, anything else = STOPPED (see `src/wifi/NetworkHandler.hpp`).
 
 Global instances:
 
 ```cpp
-extern TwaiCAN CAN1;            // multi-controller chips: controller 0
-extern TwaiCAN CAN2;            // multi-controller chips: controller 1
+extern TwaiCAN CAN1;            // multi-controller chips: first logical bus
+extern TwaiCAN CAN2;            // multi-controller chips: second logical bus
 extern TwaiCAN& ESP32Can;       // alias of CAN1; Gauge.S keeps using this
 ```
+
+The new SDK assigns hardware controllers in successful node-creation order.
+The legacy API remains single-instance; do not begin both objects on that path.
 
 ## Quick Start
 
@@ -289,7 +326,8 @@ All logging macros default to empty (zero cost). Define before the include:
 
 - Two files under `src/` (`ESP32-TWAI-CAN.hpp` + `ESP32-TWAI-CAN.cpp`);
   `library.json` `srcFilter` builds only the .cpp.
-- No dynamic allocation, no STL — C-style wrapper over the IDF driver.
+- No per-frame dynamic allocation or STL in production. The new path allocates
+  RX queue/TX shadow storage at begin and releases it at end.
 - Version lives in `library.json` (1.1.0) — keep `library.properties` in sync.
 - ESP32/Arduino-only by design (wraps the IDF TWAI driver); the WASM simulator
   does not build it — protocol logic above it (CarDataS KWP/OBD) is
@@ -307,6 +345,15 @@ lib/ESP32-TWAI-CAN/
   keywords.txt                      -- Arduino IDE syntax highlighting
   LICENSE                           -- MIT
 ```
+
+## Host Regression Tests
+
+`tests/` compiles the real wrapper for both branches against SDK stubs. See
+`tests/README.md` for commands, failure-injection coverage, a compile-only check
+against existing real IDF headers, and explicit host/IRQ limitations. The WASM
+protocol tests do not exercise this hardware wrapper.
+Compile assertions prove that a single-controller target remains on legacy TWAI
+even when IDF 5.5+ headers exist; the dual-controller/C6 check stays separate.
 
 ## License
 

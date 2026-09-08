@@ -73,8 +73,8 @@
 
 #ifdef TWAI_CAN_NEW_DRIVER
 
-/* Frame layout identical to twai_message_t (legacy driver) so application
- * code written against the legacy API compiles unchanged. */
+/* Named frame fields mirror the legacy API, not its binary layout.
+ * Do not cast or serialize this struct as twai_message_t. */
 struct CanFrame {
     uint32_t identifier;
     union {
@@ -180,6 +180,10 @@ class TwaiCAN {
     // Set before begin(); observer must be IRAM-safe when cache-safe ISR is enabled.
     void setFrameObserver(TwaiFrameObserver observer, void* context) { frameObserver = observer; observerContext = context; }
     bool getDiagnostics(TwaiDiagnostics* out);
+#else
+    // Caller-owned snapshot, independent of the old getters' shared status buffer.
+    // Returns false for nullptr or an SDK error; consume the snapshot only on true.
+    bool getStatus(twai_status_info_t* out);
 #endif
 
     bool setPins(int8_t txPin, int8_t rxPin);
@@ -214,7 +218,8 @@ class TwaiCAN {
 #else
     inline bool IRAM_ATTR_TWAI readFrame(CanFrame& frame, uint32_t timeout = 1000) {
         bool ret = false;
-        if(twai_receive(&frame, pdMS_TO_TICKS(timeout)) == ESP_OK) {
+        TickType_t ticks = (timeout == (uint32_t)portMAX_DELAY) ? portMAX_DELAY : pdMS_TO_TICKS(timeout);
+        if(twai_receive(&frame, ticks) == ESP_OK) {
             LOG_TWAI_RX("Frame received %03X", frame.identifier);
             ret = true;
         }
@@ -275,7 +280,8 @@ class TwaiCAN {
 #else
     inline bool IRAM_ATTR_TWAI writeFrame(const CanFrame& frame, uint32_t timeout = 1) {
         bool ret = false;
-        if(twai_transmit(&frame, pdMS_TO_TICKS(timeout)) == ESP_OK) {
+        TickType_t ticks = (timeout == (uint32_t)portMAX_DELAY) ? portMAX_DELAY : pdMS_TO_TICKS(timeout);
+        if(twai_transmit(&frame, ticks) == ESP_OK) {
             LOG_TWAI_TX("Frame sent     %03X", frame.identifier);
             ret = true;
         }
@@ -302,6 +308,7 @@ class TwaiCAN {
     };
     static bool IRAM_ATTR_TWAI rxDoneCb(twai_node_handle_t handle, const twai_rx_done_event_data_t* edata, void* ctx);
     static bool IRAM_ATTR_TWAI txDoneCb(twai_node_handle_t handle, const twai_tx_done_event_data_t* edata, void* ctx);
+    static bool IRAM_ATTR_TWAI stateChangeCb(twai_node_handle_t handle, const twai_state_change_event_data_t* edata, void* ctx);
 
     twai_node_handle_t node          = nullptr;
     QueueHandle_t      rxQueue       = nullptr;

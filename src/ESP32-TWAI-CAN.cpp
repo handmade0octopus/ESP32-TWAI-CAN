@@ -157,6 +157,17 @@ bool IRAM_ATTR_TWAI TwaiCAN::txDoneCb(twai_node_handle_t handle, const twai_tx_d
     return woken;
 }
 
+bool IRAM_ATTR_TWAI TwaiCAN::stateChangeCb(twai_node_handle_t handle, const twai_state_change_event_data_t* edata, void* ctx) {
+    (void)handle;
+    TwaiCAN* self = (TwaiCAN*)ctx;
+    if(edata->old_sta == TWAI_ERROR_BUS_OFF && edata->new_sta != TWAI_ERROR_BUS_OFF) {
+        portENTER_CRITICAL_ISR(&self->txMux);
+        self->recovering = false;
+        portEXIT_CRITICAL_ISR(&self->txMux);
+    }
+    return false;
+}
+
 bool TwaiCAN::getDiagnostics(TwaiDiagnostics* out) {
     if(!out) return false;
     *out = {};
@@ -181,7 +192,7 @@ bool TwaiCAN::getDiagnostics(TwaiDiagnostics* out) {
 uint32_t TwaiCAN::inTxQueue() {
     uint32_t ret = 0;
     portENTER_CRITICAL(&txMux);
-    for(uint16_t i = 0; i < txShadowCount; i++) {
+    for(uint16_t i = 0; txShadow && i < txShadowCount; i++) {
         if(txShadow[i].busy) ret++;
     }
     portEXIT_CRITICAL(&txMux);
@@ -214,31 +225,33 @@ uint32_t TwaiCAN::busErrCounter() {
 uint32_t TwaiCAN::canState() {
     uint32_t          ret = 0;
     twai_node_status_t st;
+    portENTER_CRITICAL(&txMux);
     if(getNewNodeStatus(&st)) {
         if(st.state == TWAI_ERROR_BUS_OFF) {
             ret = recovering ? TWAI_STATE_RECOVERING : TWAI_STATE_BUS_OFF;
         } else {
-            recovering = false;
             ret        = TWAI_STATE_RUNNING;
         }
     }
+    portEXIT_CRITICAL(&txMux);
     return ret;
 };
 
 bool TwaiCAN::recover(void) {
+    bool ret = false;
     twai_node_status_t st;
-    if(!getNewNodeStatus(&st)) {
-        LOG_TWAI("CAN bus status read failed!");
-        return false;
+    // IDF's recover command is nonblocking; keep its result atomic with the state IRQ.
+    portENTER_CRITICAL(&txMux);
+    if(getNewNodeStatus(&st)) {
+        if(st.state == TWAI_ERROR_BUS_OFF && !recovering) {
+            recovering = twai_node_recover(node) == ESP_OK;
+            ret = recovering;
+        } else {
+            ret = true;
+        }
     }
-    if(st.state == TWAI_ERROR_BUS_OFF) {
-        LOG_TWAI("Bus was off, starting recovery");
-        if(recovering) return true;
-        recovering = twai_node_recover(node) == ESP_OK;
-        return recovering;
-    }
-    // Already ok (or recovering), nothing to do
-    return true;
+    portEXIT_CRITICAL(&txMux);
+    return ret;
 }
 
 bool TwaiCAN::restart(void) {
@@ -290,12 +303,13 @@ bool TwaiCAN::begin(TwaiSpeed            twaiSpeed,
             txShadowCount = (txQueueSize < 4) ? 4 : txQueueSize;
             txShadow      = (TxShadow*)calloc(txShadowCount, sizeof(TxShadow));
             this->rxQueue = xQueueCreate(rxQueueSize, sizeof(CanFrame));
-            if(!txShadow || !rxQueue) {
+            if(!txShadow || !this->rxQueue) {
                 LOG_TWAI("Queue allocation failed");
             } else {
                 twai_event_callbacks_t cbs = {};
                 cbs.on_rx_done = rxDoneCb;
                 cbs.on_tx_done = txDoneCb;
+                cbs.on_state_change = stateChangeCb;
                 // Start TWAI node
                 if(twai_node_register_event_callbacks(node, &cbs, this) == ESP_OK &&
                    twai_node_enable(node) == ESP_OK) {
@@ -316,7 +330,8 @@ bool TwaiCAN::end() {
     if(init) {
         if(node) {
             twai_node_disable(node);
-            twai_node_delete(node);
+            // Do not free callback storage while a failed delete leaves the node alive.
+            if(twai_node_delete(node) != ESP_OK) return false;
             node       = nullptr;
             recovering = false;
             LOG_TWAI("Driver stopped\n");
@@ -328,12 +343,12 @@ bool TwaiCAN::end() {
         if(txShadow) {
             free(txShadow);
             txShadow      = nullptr;
-            txShadowCount = 0;
         }
         init = false;
         ret  = true;
     } else
         ret = true;
+    txShadowCount = 0;
     return ret;
 }
 
@@ -341,8 +356,12 @@ bool TwaiCAN::end() {
 
 /* ──────────────────── Legacy driver (single instance) ─────────────────── */
 
+bool TwaiCAN::getStatus(twai_status_info_t* out) {
+    return out && twai_get_status_info(out) == ESP_OK;
+}
+
 bool TwaiCAN::getStatusInfo() {
-    return ESP_OK == twai_get_status_info(&status);
+    return getStatus(&status);
 }
 
 uint32_t TwaiCAN::inTxQueue() {
@@ -463,7 +482,6 @@ bool TwaiCAN::begin(TwaiSpeed              twaiSpeed,
                     twai_timing_compat_t   tConfig) {
     bool ret = false;
     if(end()) {
-        init = true;
         setSpeed(twaiSpeed);
         setPins(txPin, rxPin);
 
@@ -517,9 +535,11 @@ bool TwaiCAN::begin(TwaiSpeed              twaiSpeed,
 
         // Install TWAI driver
         if(twai_driver_install(gConfig, tConfig, fConfig) == ESP_OK) {
+            init = true;
             LOG_TWAI("Driver installed");
         } else {
             LOG_TWAI("Failed to install driver");
+            return false;
         }
 
         // Start TWAI driver
@@ -535,28 +555,16 @@ bool TwaiCAN::begin(TwaiSpeed              twaiSpeed,
 }
 
 bool TwaiCAN::end() {
-    bool ret = false;
-    if(init) {
-        // Stop the TWAI driver
-        if(twai_stop() == ESP_OK) {
-            LOG_TWAI("Driver stopped\n");
-            ret = true;
-        } else {
-            LOG_TWAI("Failed to stop driver\n");
-        }
-
-        // Uninstall the TWAI driver
-        if(twai_driver_uninstall() == ESP_OK) {
-            LOG_TWAI("Driver uninstalled\n");
-            ret &= true;
-        } else {
-            LOG_TWAI("Failed to uninstall driver\n");
-            ret &= false;
-        }
-        init = !ret;
-    } else
-        ret = true;
-    return ret;
+    if(!init) return true;
+    // STOPPED/BUS_OFF cannot be stopped again, but can still be uninstalled.
+    twai_stop();
+    if(twai_driver_uninstall() != ESP_OK) {
+        LOG_TWAI("Failed to uninstall driver\n");
+        return false;
+    }
+    init = false;
+    LOG_TWAI("Driver uninstalled\n");
+    return true;
 }
 
 #endif /* TWAI_CAN_NEW_DRIVER */

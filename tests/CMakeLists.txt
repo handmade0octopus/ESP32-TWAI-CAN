@@ -1,0 +1,33 @@
+cmake_minimum_required(VERSION 3.20)
+project(twai_wrapper_tests CXX)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+find_package(Threads REQUIRED)
+enable_testing()
+
+foreach(branch legacy new)
+    if(branch STREQUAL "new")
+        set(controllers 2)
+    else()
+        set(controllers 1)
+    endif()
+    add_library(wrapper_${branch} OBJECT ../src/ESP32-TWAI-CAN.cpp)
+    target_include_directories(wrapper_${branch} PUBLIC stubs ../src)
+    target_compile_definitions(wrapper_${branch} PUBLIC SOC_TWAI_CONTROLLER_NUM=${controllers} TEST_TWAI_CONTROLLERS=${controllers})
+    # Intercept only the wrapper's heap calls, not the SDK stub/test runtime.
+    target_compile_options(wrapper_${branch} PRIVATE -include ${CMAKE_CURRENT_SOURCE_DIR}/stubs/alloc.h)
+    add_executable(twai_${branch} test_${branch}.cpp sdk_stub.cpp driver_selection.cpp)
+    target_link_libraries(twai_${branch} PRIVATE wrapper_${branch} Threads::Threads)
+    if(MINGW)
+        target_link_options(twai_${branch} PRIVATE -static)
+    endif()
+endforeach()
+
+foreach(case install_failure foreign_install start_failure end_stopped end_busoff
+             uninstall_failure end_recovering recovery io config status)
+    add_test(NAME legacy_${case} COMMAND twai_legacy ${case})
+endforeach()
+foreach(case node_failure shadow_failure rx_failure callback_failure enable_failure
+             delete_failure shadow_delete_failure rx_delete_failure recovery tx_slots io concurrent)
+    add_test(NAME new_${case} COMMAND twai_new ${case})
+endforeach()
